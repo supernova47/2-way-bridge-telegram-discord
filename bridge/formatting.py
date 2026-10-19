@@ -50,12 +50,14 @@ def render(
     platform = "Discord" if message.platform == "discord" else "Telegram"
     author = visible(message.author, single_line=True)[:100] or "Без имени"
     header = "" if profile_attribution else f"[{platform}] {author}: "
-    body = message.text or ("[Вложения]" if message.attachments else "")
+    body = message.text
     if message.reply_id is not None and not reply_known:
         quote = visible(message.quote, single_line=True)[:240] or "исходное сообщение недоступно"
-        body = f"↪ Ответ: {quote}\n{body}"
+        body = f"↪ Ответ: {quote}" + (f"\n{body}" if body else "")
     if message.notice:
-        body += "\n" + message.notice
+        body = f"{body}\n{message.notice}" if body else message.notice
+    if not body:
+        return []
     # A repeated attribution on each part makes long messages understandable.
     escaped_header = escape_discord(header) if target == "discord" else header
     limit = (2000 if target == "discord" else 4096) - units(escaped_header)

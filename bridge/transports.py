@@ -97,7 +97,21 @@ class TelegramTransport:
             if method == "delete_message" and "message to delete not found" in reason:
                 return None
             if file and any(
-                s in reason for s in ("file", "document", "media", "content type", "photo", "image")
+                s in reason
+                for s in (
+                    "file",
+                    "document",
+                    "media",
+                    "content type",
+                    "photo",
+                    "image",
+                    "video",
+                    "animation",
+                    "unsupported",
+                    "too large",
+                    "size",
+                    "dimensions",
+                )
             ):
                 raise AttachmentUnavailable("telegram_file_rejected") from None
             raise PermanentError("telegram_bad_request") from None
@@ -125,9 +139,27 @@ class TelegramTransport:
                     )
                 except AttachmentUnavailable:
                     pass  # Rejected photo (dimensions/encoding): preserve it as a document.
+            elif attachment.media_type in {"animation", "video"}:
+                method = "send_animation" if attachment.media_type == "animation" else "send_video"
+                media_key = "animation" if attachment.media_type == "animation" else "video"
+                try:
+                    result = await self.call(
+                        pair,
+                        method,
+                        sending=True,
+                        file=True,
+                        **{media_key: data, "filename": filename(attachment.name)},
+                        **kwargs,
+                    )
+                except AttachmentUnavailable:
+                    pass  # Preserve files rejected as previewable media as documents.
             if result is None:
                 if attachment.media_type == "image":
                     kwargs["caption"] = "[Предпросмотр недоступен; изображение передано файлом.]"
+                elif attachment.media_type == "animation":
+                    kwargs["caption"] = "[Анимация передана файлом без предпросмотра.]"
+                elif attachment.media_type == "video":
+                    kwargs["caption"] = "[Видео передано файлом без предпросмотра.]"
                 result = await self.call(
                     pair,
                     "send_document",

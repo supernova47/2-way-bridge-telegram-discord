@@ -10,6 +10,8 @@ from .formatting import chunks, render, visible
 from .model import AttachmentUnavailable, Message, PermanentError, RetryableError, UncertainError
 from .store import Store, operation_tag
 
+MB = 1_000_000
+
 log = logging.getLogger("bridge")
 
 
@@ -107,16 +109,73 @@ class Engine:
             # Fallback notices are mapped too; retries/edits do not generate duplicates.
             try:
                 await self.operation(
-                    job, pair, target, "send", slot, "", reply_id=first_id, attachment=attachment
+                    job,
+                    pair,
+                    target,
+                    "send",
+                    slot,
+                    "",
+                    reply_id=first_id if first_id is not None else reply_id,
+                    attachment=attachment,
                 )
-            except AttachmentUnavailable:
-                name = visible(attachment.name, single_line=True)[:180]
-                text = f"[Файл «{name}» не передан: превышен лимит, формат отклонён или файл недоступен.]"
+            except AttachmentUnavailable as exc:
+                text = self.attachment_notice(attachment, message.platform, target, pair, exc)
                 text = chunks(text, 1000, discord=target == "discord")[0]
-                await self.operation(job, pair, target, "send", slot, text, reply_id=first_id)
+                await self.operation(
+                    job,
+                    pair,
+                    target,
+                    "send",
+                    slot,
+                    text,
+                    reply_id=first_id if first_id is not None else reply_id,
+                )
         for slot, copy in existing.items():
             if slot not in desired:
                 await self.operation(job, pair, target, "delete", slot, message_id=int(copy["message_id"]))
+
+    def attachment_notice(self, attachment, source, target, pair, error):
+        name = visible(attachment.name, single_line=True)[:180] or "файл"
+        size = attachment.size
+        size_text = f" ({self.format_mb(size)} МБ)" if size is not None else ""
+        code = getattr(error, "code", "attachment_unavailable")
+        if code in {"file_too_large", "file_too_large_or_missing"}:
+            limit = min(
+                self.config.max_file_mb * MB,
+                self.transports[target].file_limit(pair),
+                20 * MB if source == "telegram" else 50 * MB,
+            )
+            if size is not None and size > limit:
+                limit_mb = self.format_mb(limit)
+                if source == "telegram" and limit == 20 * MB:
+                    reason = f"Bot API Telegram позволяет скачать файл размером до {limit_mb} МБ"
+                elif target == "discord" and self.transports[target].file_limit(pair) == limit:
+                    reason = f"лимит загрузки Discord-канала — {limit_mb} МБ"
+                elif limit == self.config.max_file_mb * MB:
+                    reason = f"max_file_mb в конфигурации равен {limit_mb} МБ"
+                else:
+                    reason = f"лимит передачи — {limit_mb} МБ"
+                return f"[Файл «{name}»{size_text} не передан: {reason}.]"
+            if code == "file_too_large_or_missing":
+                return (
+                    f"[Файл «{name}»{size_text} не передан: Telegram не вернул "
+                    "доступную ссылку для скачивания.]"
+                )
+            if source == "telegram" and limit == 20 * MB:
+                return (
+                    f"[Файл «{name}»{size_text} не передан: Telegram Bot API "
+                    "не скачивает файлы больше 20 МБ.]"
+                )
+            return f"[Файл «{name}»{size_text} не передан: превышен лимит размера.]"
+        if code in {"telegram_file_rejected", "discord_file_rejected"}:
+            return f"[Файл «{name}»{size_text} не принят целевой платформой; сохраните его в исходном чате.]"
+        if code in {"telegram_file_unavailable", "download_unavailable", "unsafe_download_url"}:
+            return f"[Файл «{name}»{size_text} не удалось скачать из исходного чата.]"
+        return f"[Файл «{name}»{size_text} не передан: источник или целевая платформа отклонили файл.]"
+
+    @staticmethod
+    def format_mb(size):
+        return f"{size / MB:.1f}".replace(".", ",")
 
     async def process_one(self, pair: Pair, source: str) -> bool:
         job = self.store.next_job(pair.name, source)

@@ -54,6 +54,8 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
         self.bot = NS(
             send_message=AsyncMock(return_value=NS(message_id=1234)),
             send_photo=AsyncMock(return_value=NS(message_id=1235)),
+            send_animation=AsyncMock(return_value=NS(message_id=1237)),
+            send_video=AsyncMock(return_value=NS(message_id=1238)),
             send_document=AsyncMock(return_value=NS(message_id=1236)),
             edit_message_text=AsyncMock(),
             delete_message=AsyncMock(),
@@ -82,6 +84,30 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
         await self.tt.send(self.pair, "", attachment=image, data=b"abc")
         self.bot.send_document.assert_awaited_once()
         self.assertIn("Предпросмотр недоступен", self.bot.send_document.call_args.kwargs["caption"])
+
+    async def test_gif_is_sent_as_animation_and_falls_back_to_document(self):
+        gif = Attachment("gif", "loop.gif", 3, "url", "animation")
+        await self.tt.send(self.pair, "", attachment=gif, data=b"GIF89a")
+        self.bot.send_animation.assert_awaited_once()
+        self.assertEqual(self.bot.send_animation.call_args.kwargs["filename"], "loop.gif")
+        self.bot.send_document.assert_not_awaited()
+
+        self.bot.send_animation.side_effect = BadRequest("wrong animation file")
+        await self.tt.send(self.pair, "", attachment=gif, data=b"GIF89a")
+        self.bot.send_document.assert_awaited_once()
+        self.assertIn("без предпросмотра", self.bot.send_document.call_args.kwargs["caption"])
+
+    async def test_video_is_sent_as_video_and_falls_back_to_document(self):
+        video = Attachment("video", "clip.mp4", 3, "url", "video")
+        await self.tt.send(self.pair, "", attachment=video, data=b"mp4")
+        self.bot.send_video.assert_awaited_once()
+        self.assertEqual(self.bot.send_video.call_args.kwargs["filename"], "clip.mp4")
+        self.bot.send_document.assert_not_awaited()
+
+        self.bot.send_video.side_effect = BadRequest("unsupported video codec")
+        await self.tt.send(self.pair, "", attachment=video, data=b"mp4")
+        self.bot.send_document.assert_awaited_once()
+        self.assertIn("без предпросмотра", self.bot.send_document.call_args.kwargs["caption"])
 
     async def test_telegram_rate_limit_safe_retry_and_ambiguous_network_hold(self):
         self.bot.send_message.side_effect = RetryAfter(7)

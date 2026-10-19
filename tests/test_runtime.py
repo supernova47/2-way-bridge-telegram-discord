@@ -75,7 +75,12 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
                 return_value=NS(
                     type="supergroup",
                     is_forum=False,
-                    permissions=NS(can_send_messages=True, can_send_photos=True, can_send_documents=True),
+                    permissions=NS(
+                        can_send_messages=True,
+                        can_send_photos=True,
+                        can_send_videos=True,
+                        can_send_documents=True,
+                    ),
                 )
             ),
             get_chat_member=AsyncMock(return_value=NS(status="member")),
@@ -91,6 +96,13 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         channel.permissions_for.return_value.attach_files = False
         with self.assertRaises(ConfigError):
             await validate_remote(self.config, client, bot, None)
+
+    async def test_remote_validation_rejects_missing_telegram_video_permission(self):
+        _, client, bot = self.remote()
+        bot.get_chat.return_value.permissions.can_send_videos = False
+        with self.assertRaises(ConfigError) as caught:
+            await validate_remote(self.config, client, bot, None)
+        self.assertIn("видео", str(caught.exception))
 
     async def test_remote_validation_rejects_privacy_mode_for_non_admin(self):
         _, client, bot = self.remote()

@@ -62,3 +62,7 @@ class UncertainError(Exception):
 
 class AttachmentUnavailable(Exception):
     """An attachment cannot be transferred; send an explicit notice instead."""
+
+    def __init__(self, code: str = "attachment_unavailable"):
+        super().__init__(code)
+        self.code = code

@@ -192,6 +192,37 @@ class EngineTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("hello", self.telegram.sent[0]["content"])
         self.assertIn("не передан", self.telegram.sent[1]["content"])
 
+    async def test_media_only_message_has_no_attachment_placeholder(self):
+        message = self.message(attachments=[Attachment("a", "photo.jpg", 3, "cdn", "image")])
+        message.text = ""
+        self.accept(message)
+        await self.process()
+        self.assertEqual(len(self.telegram.sent), 1)
+        self.assertEqual(self.telegram.sent[0]["content"], "")
+        self.assertEqual(self.telegram.sent[0]["attachment"].name, "photo.jpg")
+
+    async def test_media_only_reply_attaches_to_the_known_source_copy(self):
+        self.accept(self.message())
+        await self.process()
+        reply = self.message(
+            message_id=11,
+            reply_id=10,
+            attachments=[Attachment("a", "clip.mp4", 3, "cdn", "video")],
+        )
+        reply.text = ""
+        self.accept(reply)
+        await self.process()
+        self.assertEqual(self.telegram.sent[1]["reply_id"], 1000)
+
+    async def test_oversized_attachment_notice_reports_actual_size_and_limit(self):
+        self.discord.download_error = AttachmentUnavailable("file_too_large")
+        self.accept(self.message(attachments=[Attachment("a", "clip.mp4", 23_000_000, "cdn", "video")]))
+        await self.process()
+        notice = self.telegram.sent[1]["content"]
+        self.assertIn("23,0 МБ", notice)
+        self.assertIn("20,0 МБ", notice)
+        self.assertIn("max_file_mb", notice)
+
     async def test_retry_resumes_after_sent_text_without_duplication(self):
         self.discord.download_error = RetryableError("download_network")
         self.accept(self.message(attachments=[Attachment("a", "a.bin", 3, "cdn")]))
@@ -319,3 +350,7 @@ class FormattingTests(unittest.TestCase):
 
     def test_empty_and_control_only_text_is_not_silently_lost(self):
         self.assertEqual(chunks("\x00", 2000), ["(пустое сообщение)"])
+
+    def test_media_only_message_does_not_render_an_attachment_placeholder(self):
+        msg = Message("discord", 1, 2, "Автор", "chat", attachments=[Attachment("a", "pic.png", 1, "url")])
+        self.assertEqual(render(msg, "telegram", reply_known=False), [])

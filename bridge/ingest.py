@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from pathlib import PurePath
 
 import discord
 
@@ -35,14 +36,28 @@ def discord_files(files) -> list[Attachment]:
     for item in files:
         item = item if isinstance(item, dict) else item.to_dict()
         mime = item.get("content_type") or ""
-        image = mime in {"image/jpeg", "image/png", "image/webp", "image/gif"}
+        name = item.get("filename", "file.bin")
+        extension = PurePath(name).suffix.lower()
+        if mime == "image/gif" or extension == ".gif":
+            media_type = "animation"
+        elif mime.startswith("video/") or extension in {".mp4", ".mov", ".m4v", ".webm", ".mkv", ".avi"}:
+            media_type = "video"
+        elif mime in {"image/jpeg", "image/png", "image/webp"} or extension in {
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".webp",
+        }:
+            media_type = "image"
+        else:
+            media_type = "file"
         result.append(
             Attachment(
                 str(item["id"]),
-                item.get("filename", "file.bin"),
+                name,
                 item.get("size"),
                 item["url"],
-                "image" if image else "file",
+                media_type,
             )
         )
     return result
@@ -183,12 +198,22 @@ class Ingestor:
             if any(a.locator == media.file_id for a in message.attachments):
                 continue
             name = getattr(media, "file_name", None) or f"{attr}.bin"
-            mime = getattr(media, "mime_type", "")
-            image = mime in {"image/jpeg", "image/png", "image/webp", "image/gif"}
+            mime = getattr(media, "mime_type", "") or ""
+            extension = PurePath(name).suffix.lower()
+            if attr == "animation" or mime == "image/gif" or extension == ".gif":
+                media_type = "animation"
+            elif (
+                attr in {"video", "video_note"}
+                or mime.startswith("video/")
+                or extension in {".mp4", ".mov", ".m4v", ".webm", ".mkv", ".avi"}
+            ):
+                media_type = "video"
+            elif mime in {"image/jpeg", "image/png", "image/webp"} or attr == "photo":
+                media_type = "image"
+            else:
+                media_type = "file"
             message.attachments.append(
-                Attachment(
-                    media.file_unique_id, name, media.file_size, media.file_id, "image" if image else "file"
-                )
+                Attachment(media.file_unique_id, name, media.file_size, media.file_id, media_type)
             )
         if any(
             getattr(raw, k, None)

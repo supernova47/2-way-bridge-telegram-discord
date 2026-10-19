@@ -92,10 +92,15 @@ async def validate_remote(config: Config, client: BridgeClient, bot: Bot, sessio
             rights = member if member.status == "restricted" else chat.permissions
             if rights and not all(
                 getattr(rights, k, False)
-                for k in ("can_send_messages", "can_send_documents", "can_send_photos")
+                for k in (
+                    "can_send_messages",
+                    "can_send_documents",
+                    "can_send_photos",
+                    "can_send_videos",
+                )
             ):
                 raise ConfigError(
-                    f"Пара {index}: Telegram-боту нужны права отправки текста, фото и документов."
+                    f"Пара {index}: Telegram-боту нужны права отправки текста, фото, видео и документов."
                 )
         if pair.telegram_thread_id is not None and not chat.is_forum:
             raise ConfigError(f"Пара {index}: тема задана для Telegram-группы без режима форума.")

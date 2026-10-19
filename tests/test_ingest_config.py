@@ -10,7 +10,7 @@ import discord
 from telegram import Update
 
 from bridge.config import Config, ConfigError, Pair, load_config
-from bridge.ingest import Ingestor, telegram_text
+from bridge.ingest import Ingestor, discord_files, telegram_text
 from bridge.store import Store
 
 
@@ -131,6 +131,62 @@ class IngestTests(unittest.TestCase):
             self.telegram(message_id=12, text=None, dice={"emoji": "🎲", "value": 1}), 99
         )
         self.assertIn("не поддерживаемый", self.store.snapshot("one", "telegram", -100, 12).notice)
+
+    def test_discord_gifs_and_videos_keep_their_media_type(self):
+        files = discord_files(
+            [
+                {"id": "1", "filename": "loop.gif", "size": 42, "url": "https://cdn.test/1"},
+                {
+                    "id": "2",
+                    "filename": "clip.bin",
+                    "content_type": "video/mp4",
+                    "size": 84,
+                    "url": "https://cdn.test/2",
+                },
+                {
+                    "id": "3",
+                    "filename": "photo.png",
+                    "content_type": "image/png",
+                    "size": 21,
+                    "url": "https://cdn.test/3",
+                },
+            ]
+        )
+        self.assertEqual([item.media_type for item in files], ["animation", "video", "image"])
+
+    def test_telegram_gif_and_video_documents_keep_their_media_type(self):
+        self.ingest.telegram_update(
+            self.telegram(
+                text=None,
+                document={
+                    "file_id": "gif",
+                    "file_unique_id": "gif-unique",
+                    "file_name": "loop.gif",
+                    "mime_type": "image/gif",
+                    "file_size": 42,
+                },
+            ),
+            99,
+        )
+        gif = self.store.snapshot("one", "telegram", -100, 10).attachments[0]
+        self.assertEqual(gif.media_type, "animation")
+
+        self.ingest.telegram_update(
+            self.telegram(
+                message_id=11,
+                text=None,
+                document={
+                    "file_id": "video",
+                    "file_unique_id": "video-unique",
+                    "file_name": "clip.mp4",
+                    "mime_type": "video/mp4",
+                    "file_size": 84,
+                },
+            ),
+            99,
+        )
+        video = self.store.snapshot("one", "telegram", -100, 11).attachments[0]
+        self.assertEqual(video.media_type, "video")
 
     def test_telegram_protected_content_is_not_forwarded(self):
         self.ingest.telegram_update(self.telegram(has_protected_content=True, text="private"), 99)

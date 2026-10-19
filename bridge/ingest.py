@@ -5,6 +5,7 @@ from pathlib import PurePath
 
 import discord
 
+from .commands import is_discord_id_command_text, is_telegram_id_command_text
 from .config import Config
 from .model import Attachment, Message, digest
 from .store import Store
@@ -77,6 +78,7 @@ class Ingestor:
             and raw.author.bot
             or raw.type not in (discord.MessageType.default, discord.MessageType.reply)
             or self.config.is_command(raw.content)
+            or is_discord_id_command_text(raw.content)
         ):
             return
         quote = ""
@@ -117,7 +119,7 @@ class Ingestor:
             message.text = discord_text(data["content"], data.get("mentions"))
         if "attachments" in data:
             message.attachments = discord_files(data["attachments"])
-        if self.config.is_command(message.text):
+        if self.config.is_command(message.text) or is_discord_id_command_text(message.text):
             message.text, message.attachments = "[This message was edited into a command and hidden.]", []
         self.store.accept(pair.name, message, "edit", data["edited_timestamp"] + ":" + digest(data)[:16])
 
@@ -169,7 +171,7 @@ class Ingestor:
         if not raw.text and not raw.caption and not any(getattr(raw, k, None) for k in content_types):
             return
         text = telegram_text(raw)
-        if self.config.is_command(text) and not edited:
+        if (self.config.is_command(text) or is_telegram_id_command_text(text)) and not edited:
             return
         author = raw.sender_chat.title if anonymous else user.full_name if user else "Unknown user"
         message = Message(
@@ -235,7 +237,7 @@ class Ingestor:
         if raw.has_protected_content:
             message.text, message.attachments = "", []
             message.notice = "[Protected Telegram content cannot be forwarded.]"
-        if self.config.is_command(text):
+        if self.config.is_command(text) or is_telegram_id_command_text(text):
             message.text, message.attachments = "[This message was edited into a command and hidden.]", []
         self.store.accept(
             pair.name, message, "edit" if edited else "create", str(update.update_id) if edited else ""

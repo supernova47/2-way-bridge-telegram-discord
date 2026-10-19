@@ -105,6 +105,19 @@ sudo journalctl -u discord-telegram-bridge -f
 
 The service log should show `Discord connected`, `Telegram connected`, and `Bridge ready`. The bridge stores its SQLite database under `data/` by default.
 
+## Add a user mapping
+
+While the bridge is running, use `/bridge_id` in the configured Telegram group and `!bridge_id` in the configured Discord channel to get each account ID. The bot replies in the same chat. Stop the service before changing mappings, then run the interactive command:
+
+```bash
+sudo systemctl stop discord-telegram-bridge
+.venv/bin/python -m bridge --config config.toml mapping add
+.venv/bin/python -m bridge --config config.toml mapping list
+sudo systemctl start discord-telegram-bridge
+```
+
+The wizard validates the IDs and names, rejects duplicate account IDs, and updates `config.toml` atomically. It does not need bot tokens. The `mapping list` command can also be run while the service is active.
+
 ## Queue status and recovery
 
 Run these commands from the project directory. Stop the service before retrying or resolving jobs:
@@ -156,6 +169,15 @@ notepad config.toml
 
 After setup, double-click `start-server.bat` in the project root to start the bridge. It uses the PowerShell launcher, asks for missing secrets with hidden input, and retries temporary failures with a limit. Keep its window open while the bridge is running; stop it with `Ctrl+C`, then press a key to close the window. You can also run `.\scripts\start.ps1 -RestartOnFailure` directly in PowerShell. This does not install a Windows service or configure startup after reboot.
 
+While the bridge is running, `/bridge_id` in the configured Telegram group and `!bridge_id` in the configured Discord channel display the account IDs. To add a mapping on Windows, stop the bridge with `Ctrl+C` and run:
+
+```powershell
+.\.venv\Scripts\python.exe -m bridge --config config.toml mapping add
+.\.venv\Scripts\python.exe -m bridge --config config.toml mapping list
+```
+
+Start the bridge again after adding the mapping. The wizard updates `config.toml` atomically and does not require tokens.
+
 ## Run automated tests
 
 Install development tools, then run the full local test and build commands:
@@ -168,4 +190,4 @@ Install development tools, then run the full local test and build commands:
 .venv/bin/python -m build --no-isolation
 ```
 
-The suite uses mocks and does not connect to Discord or Telegram. See [TESTING.md](TESTING.md) for local and live test steps.
+The suite uses mocks and does not connect to Discord or Telegram. It also checks ID-command scoping and mapping creation/validation. See [TESTING.md](TESTING.md) for local and live test steps.

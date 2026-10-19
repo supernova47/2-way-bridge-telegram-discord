@@ -4,8 +4,11 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+
+from bridge.config import load_config
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -32,6 +35,39 @@ class CliTests(unittest.TestCase):
         self.assertEqual(
             result.stdout.splitlines(), ["DISCORD_TOKEN", "TELEGRAM_TOKEN", "DISCORD_WEBHOOK_COMMUNITY"]
         )
+
+    def test_mapping_wizard_adds_validated_config_entry_without_tokens(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "config.toml"
+            config.write_text(
+                'database = "state.sqlite3"\n\n[[pairs]]\nname="one"\n'
+                "discord_channel_id=123\ntelegram_chat_id=-100\n",
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [sys.executable, "-m", "bridge", "--config", str(config), "mapping", "add"],
+                cwd=ROOT,
+                env=self.clean_env(),
+                input="111\n222\nTelegram Name\nDiscord Name\n",
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=20,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(len(load_config(config, require_tokens=False).user_mappings), 1)
+            listed = subprocess.run(
+                [sys.executable, "-m", "bridge", "--config", str(config), "mapping", "list"],
+                cwd=ROOT,
+                env=self.clean_env(),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=20,
+            )
+            self.assertEqual(listed.returncode, 0, listed.stderr)
+            self.assertIn("Telegram ID 111", listed.stdout)
+            self.assertIn("Discord ID 222", listed.stdout)
 
     def test_missing_tokens_fail_safely_before_network_access(self):
         result = subprocess.run(

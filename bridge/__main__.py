@@ -38,6 +38,10 @@ def main() -> int:
     sub.add_parser("required-env", help="Print only the environment variable names needed by the launcher")
     sub.add_parser("telegram-chats", help="List groups in pending Telegram updates; stop the bridge first")
     sub.add_parser("telegram-users", help="List user IDs in pending Telegram updates; stop the bridge first")
+    mappings = sub.add_parser("mapping", help="Manage cross-platform user mappings")
+    mapping_actions = mappings.add_subparsers(dest="mapping_action", required=True)
+    mapping_actions.add_parser("list", help="List configured mappings")
+    mapping_actions.add_parser("add", help="Interactively add a mapping; stop the bridge first")
     sub.add_parser("status", help="Show local queue counts and problem job IDs, without message contents")
     retry = sub.add_parser("retry", help="Retry a problem job while bridge is stopped")
     retry.add_argument("job_id", type=int)
@@ -62,6 +66,24 @@ def main() -> int:
                 asyncio.run(telegram_users(token, config))
             return 0
         config = load_config(args.config, require_tokens=args.command in {"run", "check"})
+        if args.command == "mapping":
+            from .mappings import add_mapping, prompt_mapping
+
+            if args.mapping_action == "list":
+                if not config.user_mappings:
+                    print("No user mappings configured.")
+                for index, mapping in enumerate(config.user_mappings, 1):
+                    print(
+                        f"{index}. Telegram ID {mapping.telegram_user_id} ↔ Discord ID "
+                        f"{mapping.discord_user_id}; Telegram name={mapping.telegram_name!r}; "
+                        f"Discord name={mapping.discord_name!r}"
+                    )
+                return 0
+            with InstanceLock(config.database):
+                mapping = prompt_mapping()
+                count = add_mapping(args.config, mapping)
+            print(f"Mapping saved; configured mappings={count}. Restart the bridge to apply it.")
+            return 0
         if args.command == "required-env":
             names = ["DISCORD_TOKEN", "TELEGRAM_TOKEN"]
             names.extend(pair.discord_webhook_env for pair in config.pairs if pair.discord_webhook_env)

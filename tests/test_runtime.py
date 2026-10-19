@@ -13,7 +13,7 @@ from telegram import Update
 from bridge.config import Config, ConfigError, Pair
 from bridge.ingest import Ingestor
 from bridge.locking import InstanceLock
-from bridge.runtime import telegram_poll, validate_remote
+from bridge.runtime import BridgeClient, _reply_telegram_id, telegram_poll, validate_remote
 from bridge.store import Store
 
 
@@ -59,6 +59,36 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(OSError):
                 await telegram_poll(bot, Ingestor(self.config, self.store), self.store)
         self.assertEqual(self.store.get_offset(), 0)
+
+    async def test_telegram_id_reply_stays_in_topic_and_replies_to_command(self):
+        bot = NS(send_message=AsyncMock())
+        message = NS(chat_id=-100, message_id=17, is_topic_message=True, message_thread_id=5)
+        await _reply_telegram_id(bot, message, "Telegram user ID: 11\nChat ID: -100")
+        kwargs = bot.send_message.await_args.kwargs
+        self.assertEqual(kwargs["message_thread_id"], 5)
+        self.assertEqual(kwargs["reply_parameters"].message_id, 17)
+
+    async def test_discord_id_command_replies_and_never_enters_bridge_queue(self):
+        client = NS(ingestor=Ingestor(self.config, self.store), user=NS(id=99))
+        message = NS(
+            author=NS(id=22, bot=False),
+            channel=NS(id=123),
+            content="!bridge_id",
+            webhook_id=None,
+            reply=AsyncMock(),
+        )
+        await BridgeClient.on_message(client, message)
+        message.reply.assert_awaited_once()
+        self.assertEqual(message.reply.await_args.args[0], "Discord user ID: 22\nChannel ID: 123")
+        self.assertEqual(self.store.db.execute("SELECT count(*) FROM jobs").fetchone()[0], 0)
+
+    async def test_id_reply_failure_is_logged_without_raising(self):
+        bot = NS(send_message=AsyncMock(side_effect=RuntimeError("private transport details")))
+        message = NS(chat_id=-100, message_id=17, is_topic_message=False, message_thread_id=None)
+        with self.assertLogs("bridge", level="WARNING") as caught:
+            await _reply_telegram_id(bot, message, "IDs")
+        self.assertTrue(any("ID command reply failed" in line for line in caught.output))
+        self.assertNotIn("private transport details", "\n".join(caught.output))
 
     def remote(self):
         channel = Mock(spec=discord.TextChannel)

@@ -24,7 +24,7 @@ On Linux, from the project directory:
 .venv/bin/python -m build --no-isolation
 ```
 
-The test suite covers both message directions, bot and command filters, duplicate events, retries, uncertain sends, replies, edits, deletes, media previews and fallbacks, size limits, safe formatting, and secret-safe logs. A successful test run does not prove that live credentials or chat permissions are correct.
+The test suite covers both message directions, bot and command filters, scoped `/bridge_id` and `!bridge_id` replies, mapping validation and the interactive mapping CLI, duplicate events, retries, uncertain sends, replies, edits, deletes, media previews and fallbacks, size limits, safe formatting, and secret-safe logs. A successful test run does not prove that live credentials or chat permissions are correct.
 
 ## Live smoke test
 

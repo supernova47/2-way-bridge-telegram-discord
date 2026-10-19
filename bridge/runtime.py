@@ -6,10 +6,11 @@ import logging
 
 import aiohttp
 import discord
-from telegram import Bot
+from telegram import Bot, ReplyParameters
 from telegram.error import Conflict, Forbidden, InvalidToken, NetworkError, RetryAfter
 from telegram.request import HTTPXRequest
 
+from .commands import discord_id_command, telegram_id_command
 from .config import Config, ConfigError
 from .engine import Engine
 from .ingest import Ingestor
@@ -29,6 +30,17 @@ class BridgeClient(discord.Client):
         self.ingestor = ingestor
 
     async def on_message(self, message):
+        response = discord_id_command(message, self.ingestor.config, self.user.id if self.user else None)
+        if response:
+            try:
+                await message.reply(
+                    response,
+                    mention_author=False,
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+            except Exception:
+                log.warning("Discord ID command reply failed")
+            return
         self.ingestor.discord_message(message, self.user.id)
 
     async def on_raw_message_edit(self, payload):
@@ -124,32 +136,57 @@ async def validate_remote(config: Config, client: BridgeClient, bot: Bot, sessio
 
 async def telegram_poll(bot: Bot, ingestor: Ingestor, store: Store):
     failures = 0
-    while True:
-        try:
-            updates = await bot.get_updates(
-                offset=store.get_offset(), timeout=30, allowed_updates=["message", "edited_message"]
-            )
-            for update in updates:
-                # Acknowledge only after acceptance into SQLite, including on restarts.
-                ingestor.telegram_update(update, bot.id)
-                store.set_offset(update.update_id + 1)
-            failures = 0
-        except RetryAfter as exc:
-            delay = exc.retry_after
-            await asyncio.sleep(delay.total_seconds() if hasattr(delay, "total_seconds") else float(delay))
-        except (Conflict, Forbidden, InvalidToken):
-            raise ConfigError(
-                "Telegram polling conflict: another process may be running, or the token or "
-                "group access is invalid."
-            ) from None
-        except NetworkError:
-            failures += 1
-            if failures >= 10:
+    reply_tasks: set[asyncio.Task] = set()
+    try:
+        while True:
+            try:
+                updates = await bot.get_updates(
+                    offset=store.get_offset(), timeout=30, allowed_updates=["message", "edited_message"]
+                )
+                for update in updates:
+                    id_reply = telegram_id_command(update, ingestor.config, bot.id)
+                    # Acknowledge only after acceptance into SQLite, including on restarts.
+                    ingestor.telegram_update(update, bot.id)
+                    store.set_offset(update.update_id + 1)
+                    if id_reply:
+                        task = asyncio.create_task(_reply_telegram_id(bot, *id_reply))
+                        reply_tasks.add(task)
+                        task.add_done_callback(reply_tasks.discard)
+                failures = 0
+            except RetryAfter as exc:
+                delay = exc.retry_after
+                seconds = delay.total_seconds() if hasattr(delay, "total_seconds") else float(delay)
+                await asyncio.sleep(seconds)
+            except (Conflict, Forbidden, InvalidToken):
                 raise ConfigError(
-                    "Telegram remained unavailable after 10 attempts; restart the process."
+                    "Telegram polling conflict: another process may be running, or the token or "
+                    "group access is invalid."
                 ) from None
-            log.warning("Telegram polling temporarily unavailable; attempt=%s", failures)
-            await asyncio.sleep(min(60, 2**failures))
+            except NetworkError:
+                failures += 1
+                if failures >= 10:
+                    raise ConfigError(
+                        "Telegram remained unavailable after 10 attempts; restart the process."
+                    ) from None
+                log.warning("Telegram polling temporarily unavailable; attempt=%s", failures)
+                await asyncio.sleep(min(60, 2**failures))
+    finally:
+        for task in reply_tasks:
+            task.cancel()
+        await asyncio.gather(*reply_tasks, return_exceptions=True)
+
+
+async def _reply_telegram_id(bot: Bot, message, text: str):
+    try:
+        await bot.send_message(
+            chat_id=message.chat_id,
+            text=text,
+            message_thread_id=message.message_thread_id if message.is_topic_message else None,
+            reply_parameters=ReplyParameters(message_id=message.message_id, allow_sending_without_reply=True),
+        )
+    except Exception:
+        # The operator can repeat the command; don't block polling or log chat/user data.
+        log.warning("Telegram ID command reply failed")
 
 
 async def heartbeat(store: Store):

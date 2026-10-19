@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "discord-telegram-bridge"
+version = "0.1.0"
+description = "A durable, explicitly attributed Discord / Telegram bridge"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "discord.py==2.7.1",
+  "python-telegram-bot==22.8",
+  "aiohttp==3.14.5",
+]
+
+[project.optional-dependencies]
+dev = ["ruff==0.17.1", "build==1.6.1", "setuptools==84.0.0", "wheel==0.48.0"]
+
+[project.scripts]
+chat-bridge = "bridge.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["bridge*"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 110
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]

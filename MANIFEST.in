@@ -1,0 +1,3 @@
+include README.md VALIDATION.md config.example.toml
+recursive-include scripts *.ps1
+recursive-include tests *.py

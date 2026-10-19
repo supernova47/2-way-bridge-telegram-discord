@@ -1,0 +1,25 @@
+# Copy to config.toml. These IDs are examples, not working chat IDs.
+# Tokens: DISCORD_TOKEN and TELEGRAM_TOKEN environment variables only.
+database = "data/bridge.sqlite3"
+ignore_bots = true
+command_prefixes = ["/", "!"]
+max_file_mb = 20
+max_attempts = 5
+retry_base_seconds = 2
+# Hold ambiguous sends for operator review, avoiding automatic duplicates.
+retry_uncertain = false
+# Telegram groups: at most ~20 messages/minute; headroom for edits/files.
+telegram_interval_seconds = 3.2
+
+[[pairs]]
+name = "community"
+discord_channel_id = 123456789012345678
+telegram_chat_id = -1001234567890
+discord_webhook_env = "DISCORD_WEBHOOK_COMMUNITY"
+# Optional: bridge only this Telegram forum topic (omit for an ordinary group).
+# telegram_thread_id = 42
+
+# Public avatars for Telegram authors in Discord (optional).
+# Keep these URLs public; never paste Telegram Bot API file URLs here.
+# [avatars]
+# "123456789" = "https://example.com/avatar.jpg"

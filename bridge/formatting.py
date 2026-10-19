@@ -49,7 +49,12 @@ def render(
 ) -> list[str]:
     platform = "Discord" if message.platform == "discord" else "Telegram"
     author = visible(message.author, single_line=True)[:100] or "Без имени"
-    header = "" if profile_attribution else f"[{platform}] {author}: "
+    if profile_attribution:
+        header = ""
+    elif message.platform == "discord" and target == "telegram":
+        header = f"[{platform}] {author}:\n"
+    else:
+        header = f"[{platform}] {author}: "
     body = message.text
     if message.reply_id is not None and not reply_known:
         quote = visible(message.quote, single_line=True)[:240] or "исходное сообщение недоступно"

@@ -201,6 +201,14 @@ class EngineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.telegram.sent[0]["content"], "")
         self.assertEqual(self.telegram.sent[0]["attachment"].name, "photo.jpg")
 
+    async def test_media_only_attachment_failure_includes_discord_author(self):
+        self.discord.download_error = AttachmentUnavailable("file_too_large")
+        message = self.message(attachments=[Attachment("a", "photo.jpg", 3, "cdn", "image")])
+        message.text = ""
+        self.accept(message)
+        await self.process()
+        self.assertIn("[Discord] Имя без username:\n", self.telegram.sent[0]["content"])
+
     async def test_media_only_reply_attaches_to_the_known_source_copy(self):
         self.accept(self.message())
         await self.process()
@@ -332,7 +340,12 @@ class FormattingTests(unittest.TestCase):
     def test_literal_html_to_telegram(self):
         msg = Message("discord", 1, 2, "<admin>", "chat", "<b>tag</b> & **literal**")
         text = render(msg, "telegram", reply_known=False)[0]
-        self.assertEqual(text, "[Discord] <admin>: <b>tag</b> & **literal**")
+        self.assertEqual(text, "[Discord] <admin>:\n<b>tag</b> & **literal**")
+
+    def test_telegram_to_discord_attribution_stays_inline(self):
+        msg = Message("telegram", 1, 2, "Имя", "chat", "Привет")
+        text = render(msg, "discord", reply_known=False)[0]
+        self.assertTrue(text.startswith("\\[Telegram\\] Имя: Привет"))
 
     def test_discord_markdown_mentions_and_bidi_are_safe(self):
         msg = Message("telegram", 1, 2, "Имя\n\u202eadmin", "chat", "**bold** @everyone <@123> `code`")

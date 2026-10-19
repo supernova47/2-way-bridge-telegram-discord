@@ -85,6 +85,12 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
         self.bot.send_document.assert_awaited_once()
         self.assertIn("Предпросмотр недоступен", self.bot.send_document.call_args.kwargs["caption"])
 
+    async def test_telegram_media_only_has_newline_attribution_caption(self):
+        image = Attachment("a", "pic.jpg", 3, "url", "image")
+        source = Message("discord", 1, 2, "Иван", "chat", text="")
+        await self.tt.send(self.pair, "", attachment=image, data=b"abc", source_message=source)
+        self.assertEqual(self.bot.send_photo.call_args.kwargs["caption"], "[Discord] Иван:\n")
+
     async def test_gif_is_sent_as_animation_and_falls_back_to_document(self):
         gif = Attachment("gif", "loop.gif", 3, "url", "animation")
         await self.tt.send(self.pair, "", attachment=gif, data=b"GIF89a")

@@ -131,6 +131,15 @@ class TelegramTransport:
                 message_id=reply_id, allow_sending_without_reply=True
             )
         if attachment:
+            media_attribution = ""
+            if (
+                source_message
+                and source_message.platform == "discord"
+                and not source_message.text.strip()
+            ):
+                author = visible(source_message.author, single_line=True)[:100] or "Без имени"
+                media_attribution = f"[Discord] {author}:\n"
+                kwargs["caption"] = media_attribution
             result = None
             if attachment.media_type == "image" and len(data) <= 10 * MB:
                 try:
@@ -155,11 +164,15 @@ class TelegramTransport:
                     pass  # Preserve files rejected as previewable media as documents.
             if result is None:
                 if attachment.media_type == "image":
-                    kwargs["caption"] = "[Предпросмотр недоступен; изображение передано файлом.]"
+                    fallback_caption = "[Предпросмотр недоступен; изображение передано файлом.]"
                 elif attachment.media_type == "animation":
-                    kwargs["caption"] = "[Анимация передана файлом без предпросмотра.]"
+                    fallback_caption = "[Анимация передана файлом без предпросмотра.]"
                 elif attachment.media_type == "video":
-                    kwargs["caption"] = "[Видео передано файлом без предпросмотра.]"
+                    fallback_caption = "[Видео передано файлом без предпросмотра.]"
+                else:
+                    fallback_caption = ""
+                if fallback_caption:
+                    kwargs["caption"] = f"{media_attribution}{fallback_caption}"
                 result = await self.call(
                     pair,
                     "send_document",

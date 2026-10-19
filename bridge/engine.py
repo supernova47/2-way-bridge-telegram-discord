@@ -120,6 +120,9 @@ class Engine:
                 )
             except AttachmentUnavailable as exc:
                 text = self.attachment_notice(attachment, message.platform, target, pair, exc)
+                if message.platform == "discord" and target == "telegram" and not texts:
+                    author = visible(message.author, single_line=True)[:100] or "Без имени"
+                    text = f"[Discord] {author}:\n{text}"
                 text = chunks(text, 1000, discord=target == "discord")[0]
                 await self.operation(
                     job,

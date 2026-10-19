@@ -107,7 +107,7 @@ The service log should show `Discord connected`, `Telegram connected`, and `Brid
 
 ## Add a user mapping
 
-While the bridge is running, use `/bridge_id` in the configured Telegram group and `!bridge_id` in the configured Discord channel to get each account ID. The bot replies in the same chat. Stop the service before changing mappings, then run the interactive command:
+While the bridge is running, select `/bridge_id` from the Telegram command menu in the configured group; the bridge registers it there at startup. If typing it manually while Group Privacy is enabled, use `/bridge_id@YourBotUsername`. In Discord, `!bridge_id` in the configured channel shows the account ID. Stop the service before changing mappings, then run the interactive command:
 
 ```bash
 sudo systemctl stop discord-telegram-bridge
@@ -169,7 +169,7 @@ notepad config.toml
 
 After setup, double-click `start-server.bat` in the project root to start the bridge. It uses the PowerShell launcher, asks for missing secrets with hidden input, and retries temporary failures with a limit. Keep its window open while the bridge is running; stop it with `Ctrl+C`, then press a key to close the window. You can also run `.\scripts\start.ps1 -RestartOnFailure` directly in PowerShell. This does not install a Windows service or configure startup after reboot.
 
-While the bridge is running, `/bridge_id` in the configured Telegram group and `!bridge_id` in the configured Discord channel display the account IDs. To add a mapping on Windows, stop the bridge with `Ctrl+C` and run:
+While the bridge is running, select `/bridge_id` from the Telegram command menu in the configured group; if you type it manually while Group Privacy is enabled, use `/bridge_id@YourBotUsername`. In Discord, `!bridge_id` in the configured channel displays the account IDs. To add a mapping on Windows, stop the bridge with `Ctrl+C` and run:
 
 ```powershell
 .\.venv\Scripts\python.exe -m bridge --config config.toml mapping add

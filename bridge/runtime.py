@@ -6,11 +6,11 @@ import logging
 
 import aiohttp
 import discord
-from telegram import Bot, ReplyParameters
+from telegram import Bot, BotCommand, BotCommandScopeChat, ReplyParameters
 from telegram.error import Conflict, Forbidden, InvalidToken, NetworkError, RetryAfter
 from telegram.request import HTTPXRequest
 
-from .commands import discord_id_command, telegram_id_command
+from .commands import discord_id_command, is_telegram_id_command_text, telegram_id_command
 from .config import Config, ConfigError
 from .engine import Engine
 from .ingest import Ingestor
@@ -38,8 +38,8 @@ class BridgeClient(discord.Client):
                     mention_author=False,
                     allowed_mentions=discord.AllowedMentions.none(),
                 )
-            except Exception:
-                log.warning("Discord ID command reply failed")
+            except Exception as exc:
+                log.warning("Discord ID command reply failed; error_type=%s", type(exc).__name__)
             return
         self.ingestor.discord_message(message, self.user.id)
 
@@ -134,6 +134,27 @@ async def validate_remote(config: Config, client: BridgeClient, bot: Bot, sessio
     log.info("Telegram connected; configured pairs=%s", len(config.pairs))
 
 
+async def register_telegram_commands(bot: Bot, config: Config):
+    """Make Telegram's group command picker address the bridge bot explicitly."""
+    group_ids = sorted({pair.telegram_chat_id for pair in config.pairs})
+    command = [BotCommand("bridge_id", "Show your Telegram user and group IDs")]
+    failed_types = []
+    for chat_id in group_ids:
+        try:
+            await bot.set_my_commands(command, scope=BotCommandScopeChat(chat_id=chat_id))
+        except Exception as exc:
+            failed_types.append(type(exc).__name__)
+    if failed_types:
+        log.warning(
+            "Telegram helper command registration incomplete; use /bridge_id@bot_username; "
+            "failed_groups=%s error_types=%s",
+            len(failed_types),
+            ",".join(sorted(set(failed_types))),
+        )
+    else:
+        log.info("Telegram helper command registered; configured_groups=%s", len(group_ids))
+
+
 async def telegram_poll(bot: Bot, ingestor: Ingestor, store: Store):
     failures = 0
     reply_tasks: set[asyncio.Task] = set()
@@ -145,6 +166,11 @@ async def telegram_poll(bot: Bot, ingestor: Ingestor, store: Store):
                 )
                 for update in updates:
                     id_reply = telegram_id_command(update, ingestor.config, bot.id)
+                    if update.message and is_telegram_id_command_text(update.message.text):
+                        log.info(
+                            "Telegram ID command %s",
+                            "received" if id_reply else "ignored outside configured human routes",
+                        )
                     # Acknowledge only after acceptance into SQLite, including on restarts.
                     ingestor.telegram_update(update, bot.id)
                     store.set_offset(update.update_id + 1)
@@ -184,9 +210,11 @@ async def _reply_telegram_id(bot: Bot, message, text: str):
             message_thread_id=message.message_thread_id if message.is_topic_message else None,
             reply_parameters=ReplyParameters(message_id=message.message_id, allow_sending_without_reply=True),
         )
-    except Exception:
+    except Exception as exc:
         # The operator can repeat the command; don't block polling or log chat/user data.
-        log.warning("Telegram ID command reply failed")
+        log.warning("Telegram ID command reply failed; error_type=%s", type(exc).__name__)
+    else:
+        log.info("Telegram ID command reply sent")
 
 
 async def heartbeat(store: Store):
@@ -228,6 +256,7 @@ async def run(config: Config, store: Store):
                 if ready not in done:
                     raise ConfigError("Timed out while connecting to Discord.")
                 await validate_remote(config, client, bot, session)
+                await register_telegram_commands(bot, config)
                 engine = Engine(
                     config,
                     store,

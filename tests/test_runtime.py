@@ -13,7 +13,13 @@ from telegram import Update
 from bridge.config import Config, ConfigError, Pair
 from bridge.ingest import Ingestor
 from bridge.locking import InstanceLock
-from bridge.runtime import BridgeClient, _reply_telegram_id, telegram_poll, validate_remote
+from bridge.runtime import (
+    BridgeClient,
+    _reply_telegram_id,
+    register_telegram_commands,
+    telegram_poll,
+    validate_remote,
+)
 from bridge.store import Store
 
 
@@ -52,6 +58,62 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(bot.get_updates.call_args_list[0].kwargs["offset"], 0)
         self.assertEqual(bot.get_updates.call_args_list[1].kwargs["offset"], 8)
         self.assertEqual(self.store.status(), {"pending": 1})
+
+    async def test_repeated_telegram_id_commands_each_receive_a_reply(self):
+        updates = [
+            Update.de_json(
+                {
+                    "update_id": update_id,
+                    "message": {
+                        "message_id": message_id,
+                        "date": 1_700_000_000,
+                        "chat": {"id": -100, "type": "group", "title": "group"},
+                        "from": {"id": 1, "is_bot": False, "first_name": "A"},
+                        "text": "/bridge_id",
+                    },
+                },
+                None,
+            )
+            for update_id, message_id in ((7, 10), (8, 11))
+        ]
+        calls = 0
+        second_reply_sent = asyncio.Event()
+
+        async def get_updates(**kwargs):
+            nonlocal calls
+            calls += 1
+            if calls <= len(updates):
+                return [updates[calls - 1]]
+            await asyncio.Event().wait()
+
+        sent_ids = []
+
+        async def send_message(**kwargs):
+            sent_ids.append(kwargs["reply_parameters"].message_id)
+            if len(sent_ids) == 2:
+                second_reply_sent.set()
+
+        bot = NS(
+            id=99,
+            get_updates=AsyncMock(side_effect=get_updates),
+            send_message=AsyncMock(side_effect=send_message),
+        )
+        task = asyncio.create_task(telegram_poll(bot, Ingestor(self.config, self.store), self.store))
+        await asyncio.wait_for(second_reply_sent.wait(), timeout=1)
+        task.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+        self.assertEqual(sent_ids, [10, 11])
+        self.assertEqual(self.store.get_offset(), 9)
+        self.assertEqual([call.kwargs["offset"] for call in bot.get_updates.await_args_list], [0, 8, 9])
+
+    async def test_telegram_command_is_registered_only_for_configured_group(self):
+        bot = NS(set_my_commands=AsyncMock())
+        await register_telegram_commands(bot, self.config)
+        bot.set_my_commands.assert_awaited_once()
+        kwargs = bot.set_my_commands.await_args.kwargs
+        self.assertEqual(kwargs["scope"].chat_id, -100)
+        self.assertEqual(bot.set_my_commands.await_args.args[0][0].command, "bridge_id")
 
     async def test_intake_failure_does_not_advance_offset(self):
         bot = NS(id=99, get_updates=AsyncMock(return_value=[self.update()]))

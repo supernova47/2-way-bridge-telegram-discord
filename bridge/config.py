@@ -25,6 +25,14 @@ class Pair:
 
 
 @dataclass(frozen=True)
+class UserMapping:
+    telegram_user_id: int
+    discord_user_id: int
+    telegram_name: str
+    discord_name: str
+
+
+@dataclass(frozen=True)
 class Config:
     pairs: tuple[Pair, ...]
     database: Path
@@ -39,6 +47,7 @@ class Config:
     telegram_interval_seconds: float = 3.2
     webhooks: dict[str, str] = field(default_factory=dict, repr=False)
     avatars: dict[str, str] = field(default_factory=dict, repr=False)
+    user_mappings: tuple[UserMapping, ...] = ()
 
     def route(self, platform: str, chat_id: int, thread_id: int | None = None) -> Pair | None:
         for pair in self.pairs:
@@ -51,6 +60,30 @@ class Config:
 
     def is_command(self, text: str) -> bool:
         return text.lstrip().startswith(self.command_prefixes)
+
+    def mapped_name(self, source_platform: str, user_id: int | None) -> str | None:
+        """Return the configured name for this user on the opposite platform."""
+        if user_id is None:
+            return None
+        if source_platform == "telegram":
+            return next(
+                (
+                    mapping.discord_name
+                    for mapping in self.user_mappings
+                    if mapping.telegram_user_id == user_id
+                ),
+                None,
+            )
+        if source_platform == "discord":
+            return next(
+                (
+                    mapping.telegram_name
+                    for mapping in self.user_mappings
+                    if mapping.discord_user_id == user_id
+                ),
+                None,
+            )
+        return None
 
 
 def load_config(path: Path, *, require_tokens: bool = True) -> Config:
@@ -101,7 +134,37 @@ def load_config(path: Path, *, require_tokens: bool = True) -> Config:
         seen_discord.add(pair.discord_channel_id)
         seen_telegram.add(tg)
         pairs.append(pair)
-    values = {k: v for k, v in raw.items() if k not in {"pairs", "database", "avatars"}}
+    values = {k: v for k, v in raw.items() if k not in {"pairs", "database", "avatars", "user_mappings"}}
+    user_mappings = raw.get("user_mappings", [])
+    if not isinstance(user_mappings, list) or len(user_mappings) > 1000:
+        raise ConfigError("user_mappings must be an array with at most 1000 entries.")
+    parsed_mappings = []
+    telegram_users, discord_users = set(), set()
+    for item in user_mappings:
+        if not isinstance(item, dict) or set(item) != set(UserMapping.__dataclass_fields__):
+            raise ConfigError(
+                "Each [[user_mappings]] entry requires telegram_user_id, discord_user_id, "
+                "telegram_name, and discord_name."
+            )
+        try:
+            mapping = UserMapping(**item)
+        except TypeError:
+            raise ConfigError("Invalid [[user_mappings]] entry.") from None
+        if (
+            type(mapping.telegram_user_id) is not int
+            or not 0 < mapping.telegram_user_id < 2**64
+            or type(mapping.discord_user_id) is not int
+            or not 0 < mapping.discord_user_id < 2**64
+        ):
+            raise ConfigError("Mapped Telegram and Discord user IDs must be positive integers.")
+        for name in (mapping.telegram_name, mapping.discord_name):
+            if not isinstance(name, str) or not name.strip() or len(name) > 80:
+                raise ConfigError("Mapped names must contain 1 to 80 characters.")
+        if mapping.telegram_user_id in telegram_users or mapping.discord_user_id in discord_users:
+            raise ConfigError("Each Telegram and Discord user ID can appear in only one mapping.")
+        telegram_users.add(mapping.telegram_user_id)
+        discord_users.add(mapping.discord_user_id)
+        parsed_mappings.append(mapping)
     avatars = raw.get("avatars", {})
     if not isinstance(avatars, dict):
         raise ConfigError("avatars must be a table mapping Telegram user IDs to public HTTPS avatar URLs.")
@@ -166,4 +229,5 @@ def load_config(path: Path, *, require_tokens: bool = True) -> Config:
         **values,
         webhooks=webhooks,
         avatars=avatars,
+        user_mappings=tuple(parsed_mappings),
     )

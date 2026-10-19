@@ -23,3 +23,11 @@ discord_webhook_env = "DISCORD_WEBHOOK_COMMUNITY"
 # Keep these URLs public; never paste Telegram Bot API file URLs here.
 # [avatars]
 # "123456789" = "https://example.com/avatar.jpg"
+
+# Optional global one-to-one user mappings. IDs are numeric platform user IDs.
+# Telegram messages use discord_name in Discord; Discord messages use telegram_name in Telegram.
+# [[user_mappings]]
+# telegram_user_id = 111111111
+# discord_user_id = 222222222
+# telegram_name = "Ivan Romanov"
+# discord_name = "SuperNova"

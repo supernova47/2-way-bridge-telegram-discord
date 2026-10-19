@@ -45,10 +45,15 @@ def chunks(text: str, limit: int, *, discord: bool = False) -> list[str]:
 
 
 def render(
-    message: Message, target: str, *, reply_known: bool, profile_attribution: bool = False
+    message: Message,
+    target: str,
+    *,
+    reply_known: bool,
+    profile_attribution: bool = False,
+    author_name: str | None = None,
 ) -> list[str]:
     platform = "Discord" if message.platform == "discord" else "Telegram"
-    author = visible(message.author, single_line=True)[:100] or "Unknown user"
+    author = visible(author_name or message.author, single_line=True)[:100] or "Unknown user"
     if profile_attribution:
         header = ""
     elif message.platform == "discord" and target == "telegram":

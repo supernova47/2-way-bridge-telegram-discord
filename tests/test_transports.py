@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import discord
 from telegram.error import BadRequest, NetworkError, RetryAfter
 
-from bridge.config import Config, Pair
+from bridge.config import Config, Pair, UserMapping
 from bridge.model import (
     Attachment,
     AttachmentUnavailable,
@@ -91,6 +91,21 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
         await self.tt.send(self.pair, "", attachment=image, data=b"abc", source_message=source)
         self.assertEqual(self.bot.send_photo.call_args.kwargs["caption"], "[Discord] Иван:\n")
 
+    async def test_telegram_media_caption_uses_mapped_discord_author(self):
+        image = Attachment("a", "pic.jpg", 3, "url", "image")
+        object.__setattr__(
+            self.config,
+            "user_mappings",
+            (
+                UserMapping(
+                    telegram_user_id=111, discord_user_id=222, telegram_name="Ivan", discord_name="SuperNova"
+                ),
+            ),
+        )
+        source = Message("discord", 1, 2, "Old name", "chat", author_id=222)
+        await self.tt.send(self.pair, "", attachment=image, data=b"abc", source_message=source)
+        self.assertEqual(self.bot.send_photo.call_args.kwargs["caption"], "[Discord] Ivan:\n")
+
     async def test_gif_is_sent_as_animation_and_falls_back_to_document(self):
         gif = Attachment("gif", "loop.gif", 3, "url", "animation")
         await self.tt.send(self.pair, "", attachment=gif, data=b"GIF89a")
@@ -157,6 +172,21 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(args["params"], {"wait": "true"})
         self.assertNotIn("Authorization", args["headers"])
         self.assertNotIn("nonce", args["json"])
+
+    async def test_webhook_uses_mapped_discord_profile_name(self):
+        self.config.webhooks["one"] = "https://discord.com/api/webhooks/1/not-a-real-webhook"
+        object.__setattr__(
+            self.config,
+            "user_mappings",
+            (
+                UserMapping(
+                    telegram_user_id=88, discord_user_id=222, telegram_name="Ivan", discord_name="SuperNova"
+                ),
+            ),
+        )
+        msg = Message("telegram", -100, 10, "Old name", "chat", "hello", author_id=88)
+        await self.dt.send(self.pair, "text", source_message=msg)
+        self.assertEqual(self.session.post.call_args.kwargs["json"]["username"], "SuperNova · Telegram")
 
     async def test_discord_429_retries_but_500_and_timeouts_are_held(self):
         self.session.post.return_value = Response(429, {"retry_after": 9})

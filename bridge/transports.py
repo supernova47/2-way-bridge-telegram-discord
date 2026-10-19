@@ -133,7 +133,11 @@ class TelegramTransport:
         if attachment:
             media_attribution = ""
             if source_message and source_message.platform == "discord" and not source_message.text.strip():
-                author = visible(source_message.author, single_line=True)[:100] or "Unknown user"
+                author_name = (
+                    self.config.mapped_name(source_message.platform, source_message.author_id)
+                    or source_message.author
+                )
+                author = visible(author_name, single_line=True)[:100] or "Unknown user"
                 media_attribution = f"[Discord] {author}:\n"
                 kwargs["caption"] = media_attribution
             result = None
@@ -267,7 +271,15 @@ class DiscordTransport:
                 params["thread_id"] = str(channel.id)
             payload.pop("nonce")
             payload.pop("enforce_nonce")
-            author = visible(source_message.author if source_message else "Participant", single_line=True)
+            mapped_name = (
+                self.config.mapped_name(source_message.platform, source_message.author_id)
+                if source_message
+                else None
+            )
+            author = visible(
+                mapped_name or (source_message.author if source_message else "Participant"),
+                single_line=True,
+            )
             author = re.sub(r"discord|clyde", "Participant", author, flags=re.IGNORECASE)
             payload["username"] = (author[:60] or "Participant") + " · Telegram"
             avatar = self.config.avatars.get(str(source_message.author_id)) if source_message else None

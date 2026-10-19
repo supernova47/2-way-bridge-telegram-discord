@@ -28,7 +28,7 @@ def configure_logging():
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Discord ↔ Telegram bridge")
+    parser = argparse.ArgumentParser(description="Discord-Telegram bridge")
     parser.add_argument("--config", type=Path, default=Path("config.toml"))
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser(
@@ -37,6 +37,7 @@ def main() -> int:
     sub.add_parser("run", help="Connect and run the bridge")
     sub.add_parser("required-env", help="Print only the environment variable names needed by the launcher")
     sub.add_parser("telegram-chats", help="List groups in pending Telegram updates; stop the bridge first")
+    sub.add_parser("telegram-users", help="List user IDs in pending Telegram updates; stop the bridge first")
     sub.add_parser("status", help="Show local queue counts and problem job IDs, without message contents")
     retry = sub.add_parser("retry", help="Retry a problem job while bridge is stopped")
     retry.add_argument("job_id", type=int)
@@ -48,13 +49,17 @@ def main() -> int:
     configure_logging()
     log = logging.getLogger("bridge")
     try:
-        if args.command == "telegram-chats":
+        if args.command in {"telegram-chats", "telegram-users"}:
             token = os.environ.get("TELEGRAM_TOKEN", "").strip()
             if not token:
                 raise ConfigError("Missing environment variable: TELEGRAM_TOKEN.")
-            from .discovery import telegram_chats
+            from .discovery import telegram_chats, telegram_users
 
-            asyncio.run(telegram_chats(token))
+            if args.command == "telegram-chats":
+                asyncio.run(telegram_chats(token))
+            else:
+                config = load_config(args.config, require_tokens=False)
+                asyncio.run(telegram_users(token, config))
             return 0
         config = load_config(args.config, require_tokens=args.command in {"run", "check"})
         if args.command == "required-env":

@@ -74,11 +74,13 @@ class Engine:
             return
         reply_id = self.store.reply_target(pair.name, message, target)
         native_reply = reply_id is not None and not (target == "discord" and pair.discord_webhook_env)
+        author_name = self.config.mapped_name(message.platform, message.author_id) or message.author
         texts = render(
             message,
             target,
             reply_known=native_reply,
             profile_attribution=bool(target == "discord" and pair.discord_webhook_env),
+            author_name=author_name,
         )
         desired = set()
         first_id = None
@@ -121,7 +123,7 @@ class Engine:
             except AttachmentUnavailable as exc:
                 text = self.attachment_notice(attachment, message.platform, target, pair, exc)
                 if message.platform == "discord" and target == "telegram" and not texts:
-                    author = visible(message.author, single_line=True)[:100] or "Unknown user"
+                    author = visible(author_name, single_line=True)[:100] or "Unknown user"
                     text = f"[Discord] {author}:\n{text}"
                 text = chunks(text, 1000, discord=target == "discord")[0]
                 await self.operation(

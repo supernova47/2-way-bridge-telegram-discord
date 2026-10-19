@@ -47,6 +47,22 @@ class CliTests(unittest.TestCase):
         self.assertIn("DISCORD_WEBHOOK_COMMUNITY", result.stderr)
         self.assertNotIn("Traceback", result.stderr)
 
+    @unittest.skipUnless(os.name == "nt", "Windows console encoding only")
+    def test_help_is_printable_in_cp1251_console(self):
+        env = self.clean_env()
+        env["PYTHONIOENCODING"] = "cp1251"
+        result = subprocess.run(
+            [sys.executable, "-m", "bridge", "--help"],
+            cwd=ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="cp1251",
+            timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("telegram-users", result.stdout)
+
     @unittest.skipUnless(os.name == "nt" and shutil.which("powershell.exe"), "Windows launcher only")
     def test_powershell_launcher_checks_configuration_noninteractively(self):
         result = subprocess.run(

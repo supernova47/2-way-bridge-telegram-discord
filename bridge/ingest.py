@@ -92,6 +92,7 @@ class Ingestor:
             attachments=discord_files(raw.attachments),
             reply_id=raw.reference.message_id if raw.reference else None,
             quote=quote,
+            author_id=raw.author.id,
         )
         if raw.stickers:
             message.notice = "[Discord stickers are not supported by this bridge.]"

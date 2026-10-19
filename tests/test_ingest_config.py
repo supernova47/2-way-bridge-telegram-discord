@@ -73,6 +73,7 @@ class IngestTests(unittest.TestCase):
         self.assertEqual(self.count(), 0)
         self.ingest.discord_message(self.discord(), 99)
         self.assertEqual(self.count(), 1)
+        self.assertEqual(self.store.snapshot("one", "discord", 123, 10).author_id, 1)
 
     def test_self_is_filtered_even_when_other_bots_enabled(self):
         object.__setattr__(self.config, "ignore_bots", False)
@@ -300,3 +301,18 @@ class ConfigTests(unittest.TestCase):
         with self.assertRaises(ConfigError) as caught:
             load_config(self.path, require_tokens=False)
         self.assertNotIn("SECRET", str(caught.exception))
+
+    def test_user_mapping_matches_platform_ids_and_rejects_ambiguous_ids(self):
+        mapping = (
+            "\n[[user_mappings]]\ntelegram_user_id=111\ndiscord_user_id=222\n"
+            'telegram_name="Ivan Romanov"\ndiscord_name="SuperNova"\n'
+        )
+        self.path.write_text(self.base + mapping, encoding="utf-8")
+        config = load_config(self.path, require_tokens=False)
+        self.assertEqual(config.mapped_name("telegram", 111), "SuperNova")
+        self.assertEqual(config.mapped_name("discord", 222), "Ivan Romanov")
+        self.assertIsNone(config.mapped_name("telegram", 999))
+
+        self.path.write_text(self.base + mapping + mapping, encoding="utf-8")
+        with self.assertRaises(ConfigError):
+            load_config(self.path, require_tokens=False)

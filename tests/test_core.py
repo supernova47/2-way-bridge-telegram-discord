@@ -7,7 +7,7 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-from bridge.config import Config, ConfigError, Pair
+from bridge.config import Config, ConfigError, Pair, UserMapping
 from bridge.engine import Engine
 from bridge.formatting import chunks, render, units
 from bridge.model import (
@@ -99,6 +99,30 @@ class EngineTests(unittest.IsolatedAsyncioTestCase):
         self.store.close()
         self.store = Store(self.path)
         self.assertEqual(self.store.status(), {"done": 2})
+
+    async def test_user_mapping_changes_cross_platform_attribution(self):
+        self.config = replace(
+            self.config,
+            user_mappings=(
+                UserMapping(
+                    telegram_user_id=111,
+                    discord_user_id=222,
+                    telegram_name="Ivan Romanov",
+                    discord_name="SuperNova",
+                ),
+            ),
+        )
+        self.engine = Engine(self.config, self.store, {"discord": self.discord, "telegram": self.telegram})
+
+        telegram_message = self.message("telegram", author_id=111)
+        self.accept(telegram_message)
+        await self.process("telegram")
+        self.assertIn("SuperNova", self.discord.sent[0]["content"])
+
+        discord_message = self.message("discord", message_id=11, author_id=222)
+        self.accept(discord_message)
+        await self.process("discord")
+        self.assertTrue(self.telegram.sent[0]["content"].startswith("[Discord] Ivan Romanov:\n"))
 
     async def test_duplicate_create_event_has_one_delivery(self):
         msg = self.message()
@@ -346,6 +370,11 @@ class FormattingTests(unittest.TestCase):
         msg = Message("telegram", 1, 2, "Имя", "chat", "Привет")
         text = render(msg, "discord", reply_known=False)[0]
         self.assertTrue(text.startswith("\\[Telegram\\] Имя: Привет"))
+
+    def test_mapped_name_is_safely_escaped_and_keeps_telegram_newline(self):
+        msg = Message("discord", 1, 2, "Old name", "chat", "hello")
+        text = render(msg, "telegram", reply_known=False, author_name="Иван <admin>")[0]
+        self.assertEqual(text, "[Discord] Иван <admin>:\nhello")
 
     def test_discord_markdown_mentions_and_bidi_are_safe(self):
         msg = Message("telegram", 1, 2, "Имя\n\u202eadmin", "chat", "**bold** @everyone <@123> `code`")

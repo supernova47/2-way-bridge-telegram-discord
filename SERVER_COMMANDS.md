@@ -145,17 +145,16 @@ sudo systemctl status discord-telegram-bridge --no-pager
 
 ## Windows Server / PowerShell
 
-Run these from the project directory. The launcher prompts for missing tokens and webhook URLs using hidden input:
+Run setup from the project directory. The launcher prompts for missing tokens and webhook URLs using hidden input:
 
 ```powershell
 py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e .
 Copy-Item -LiteralPath config.example.toml -Destination config.toml
 notepad config.toml
-.\scripts\start.ps1 -RestartOnFailure
 ```
 
-Stop with `Ctrl+C`. The PowerShell launcher restarts after failures but does not install a Windows service or configure startup after reboot.
+After setup, double-click `start-server.bat` in the project root to start the bridge. It uses the PowerShell launcher, asks for missing secrets with hidden input, and retries temporary failures with a limit. Keep its window open while the bridge is running; stop it with `Ctrl+C`, then press a key to close the window. You can also run `.\scripts\start.ps1 -RestartOnFailure` directly in PowerShell. This does not install a Windows service or configure startup after reboot.
 
 ## Run automated tests
 

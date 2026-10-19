@@ -132,12 +132,8 @@ class TelegramTransport:
             )
         if attachment:
             media_attribution = ""
-            if (
-                source_message
-                and source_message.platform == "discord"
-                and not source_message.text.strip()
-            ):
-                author = visible(source_message.author, single_line=True)[:100] or "Без имени"
+            if source_message and source_message.platform == "discord" and not source_message.text.strip():
+                author = visible(source_message.author, single_line=True)[:100] or "Unknown user"
                 media_attribution = f"[Discord] {author}:\n"
                 kwargs["caption"] = media_attribution
             result = None
@@ -164,11 +160,11 @@ class TelegramTransport:
                     pass  # Preserve files rejected as previewable media as documents.
             if result is None:
                 if attachment.media_type == "image":
-                    fallback_caption = "[Предпросмотр недоступен; изображение передано файлом.]"
+                    fallback_caption = "[Preview unavailable; image was sent as a file.]"
                 elif attachment.media_type == "animation":
-                    fallback_caption = "[Анимация передана файлом без предпросмотра.]"
+                    fallback_caption = "[Animation was sent as a file without a preview.]"
                 elif attachment.media_type == "video":
-                    fallback_caption = "[Видео передано файлом без предпросмотра.]"
+                    fallback_caption = "[Video was sent as a file without a preview.]"
                 else:
                     fallback_caption = ""
                 if fallback_caption:
@@ -271,9 +267,9 @@ class DiscordTransport:
                 params["thread_id"] = str(channel.id)
             payload.pop("nonce")
             payload.pop("enforce_nonce")
-            author = visible(source_message.author if source_message else "Участник", single_line=True)
-            author = re.sub(r"discord|clyde", "Участник", author, flags=re.IGNORECASE)
-            payload["username"] = (author[:60] or "Участник") + " · Telegram"
+            author = visible(source_message.author if source_message else "Participant", single_line=True)
+            author = re.sub(r"discord|clyde", "Participant", author, flags=re.IGNORECASE)
+            payload["username"] = (author[:60] or "Participant") + " · Telegram"
             avatar = self.config.avatars.get(str(source_message.author_id)) if source_message else None
             if avatar:
                 payload["avatar_url"] = avatar

@@ -41,14 +41,14 @@ def chunks(text: str, limit: int, *, discord: bool = False) -> list[str]:
         size += count
     if current:
         result.append("".join(current))
-    return result or ["(пустое сообщение)"]
+    return result or ["(empty message)"]
 
 
 def render(
     message: Message, target: str, *, reply_known: bool, profile_attribution: bool = False
 ) -> list[str]:
     platform = "Discord" if message.platform == "discord" else "Telegram"
-    author = visible(message.author, single_line=True)[:100] or "Без имени"
+    author = visible(message.author, single_line=True)[:100] or "Unknown user"
     if profile_attribution:
         header = ""
     elif message.platform == "discord" and target == "telegram":
@@ -57,8 +57,8 @@ def render(
         header = f"[{platform}] {author}: "
     body = message.text
     if message.reply_id is not None and not reply_known:
-        quote = visible(message.quote, single_line=True)[:240] or "исходное сообщение недоступно"
-        body = f"↪ Ответ: {quote}" + (f"\n{body}" if body else "")
+        quote = visible(message.quote, single_line=True)[:240] or "original message unavailable"
+        body = f"↪ Reply: {quote}" + (f"\n{body}" if body else "")
     if message.notice:
         body = f"{body}\n{message.notice}" if body else message.notice
     if not body:

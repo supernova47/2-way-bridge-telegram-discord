@@ -12,11 +12,11 @@ from .store import Store
 
 def discord_text(text: str, mentions: list[dict] | None = None) -> str:
     for user in mentions or []:
-        name = user.get("global_name") or user.get("username") or "пользователь"
+        name = user.get("global_name") or user.get("username") or "User"
         text = re.sub(rf"<@!?{int(user['id'])}>", lambda _, name=name: "@" + name, text)
-    text = re.sub(r"<@!?\d+>", "@пользователь", text)
-    text = re.sub(r"<@&\d+>", "@роль", text)
-    return re.sub(r"<#\d+>", "#канал", text)
+    text = re.sub(r"<@!?\d+>", "@User", text)
+    text = re.sub(r"<@&\d+>", "@Role", text)
+    return re.sub(r"<#\d+>", "#channel", text)
 
 
 def telegram_text(message) -> str:
@@ -94,11 +94,11 @@ class Ingestor:
             quote=quote,
         )
         if raw.stickers:
-            message.notice = "[Стикеры Discord не поддерживаются мостом.]"
+            message.notice = "[Discord stickers are not supported by this bridge.]"
         if getattr(raw, "poll", None):
-            message.notice += "\n[Опрос Discord не поддерживается мостом.]"
+            message.notice += "\n[Discord polls are not supported by this bridge.]"
         if raw.embeds and not message.text and not message.attachments:
-            message.notice += "\n[Сообщение содержит embed; его содержимое не поддерживается мостом.]"
+            message.notice += "\n[This message contains an embed that this bridge cannot display.]"
         self.store.accept(pair.name, message, "create")
 
     def discord_edit(self, payload):
@@ -117,7 +117,7 @@ class Ingestor:
         if "attachments" in data:
             message.attachments = discord_files(data["attachments"])
         if self.config.is_command(message.text):
-            message.text, message.attachments = "[Сообщение изменено на команду и скрыто.]", []
+            message.text, message.attachments = "[This message was edited into a command and hidden.]", []
         self.store.accept(pair.name, message, "edit", data["edited_timestamp"] + ":" + digest(data)[:16])
 
     def discord_delete(self, channel_id: int, message_id: int):
@@ -170,13 +170,13 @@ class Ingestor:
         text = telegram_text(raw)
         if self.config.is_command(text) and not edited:
             return
-        author = raw.sender_chat.title if anonymous else user.full_name if user else "Без имени"
+        author = raw.sender_chat.title if anonymous else user.full_name if user else "Unknown user"
         message = Message(
             platform="telegram",
             chat_id=raw.chat_id,
             message_id=raw.message_id,
             author=author,
-            channel=raw.chat.title or "группа",
+            channel=raw.chat.title or "group",
             text=text,
             reply_id=raw.reply_to_message.message_id if raw.reply_to_message else None,
             quote=(raw.reply_to_message.text or raw.reply_to_message.caption or "")
@@ -230,12 +230,12 @@ class Ingestor:
                 "rich_message",
             )
         ):
-            message.notice = "[Сообщение содержит тип содержимого, не поддерживаемый мостом.]"
+            message.notice = "[This message contains a content type that this bridge does not support.]"
         if raw.has_protected_content:
             message.text, message.attachments = "", []
-            message.notice = "[Защищённое содержимое Telegram не пересылается.]"
+            message.notice = "[Protected Telegram content cannot be forwarded.]"
         if self.config.is_command(text):
-            message.text, message.attachments = "[Сообщение изменено на команду и скрыто.]", []
+            message.text, message.attachments = "[This message was edited into a command and hidden.]", []
         self.store.accept(
             pair.name, message, "edit" if edited else "create", str(update.update_id) if edited else ""
         )

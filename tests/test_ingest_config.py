@@ -130,7 +130,7 @@ class IngestTests(unittest.TestCase):
         self.ingest.telegram_update(
             self.telegram(message_id=12, text=None, dice={"emoji": "🎲", "value": 1}), 99
         )
-        self.assertIn("не поддерживаемый", self.store.snapshot("one", "telegram", -100, 12).notice)
+        self.assertIn("not support", self.store.snapshot("one", "telegram", -100, 12).notice)
 
     def test_discord_gifs_and_videos_keep_their_media_type(self):
         files = discord_files(
@@ -192,7 +192,7 @@ class IngestTests(unittest.TestCase):
         self.ingest.telegram_update(self.telegram(has_protected_content=True, text="private"), 99)
         msg = self.store.snapshot("one", "telegram", -100, 10)
         self.assertEqual(msg.text, "")
-        self.assertIn("Защищённое", msg.notice)
+        self.assertIn("Protected", msg.notice)
 
     def test_hidden_link_target_and_emoji_utf16_offsets_are_preserved(self):
         update = self.telegram(
@@ -222,7 +222,7 @@ class IngestTests(unittest.TestCase):
         self.assertEqual(self.store.snapshot("one", "discord", 123, 10).text, "new")
         payload.data = {"edited_timestamp": "2026-10-19T00:00:01Z", "content": "/command"}
         self.ingest.discord_edit(payload)
-        self.assertIn("скрыто", self.store.snapshot("one", "discord", 123, 10).text)
+        self.assertIn("hidden", self.store.snapshot("one", "discord", 123, 10).text)
         self.ingest.discord_delete(123, 10)
         self.ingest.discord_delete(123, 10)
         self.assertEqual(self.count(), 4)

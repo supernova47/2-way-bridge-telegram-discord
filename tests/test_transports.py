@@ -83,7 +83,7 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
         self.bot.send_photo.side_effect = BadRequest("Wrong file identifier/http url specified")
         await self.tt.send(self.pair, "", attachment=image, data=b"abc")
         self.bot.send_document.assert_awaited_once()
-        self.assertIn("Предпросмотр недоступен", self.bot.send_document.call_args.kwargs["caption"])
+        self.assertIn("Preview unavailable", self.bot.send_document.call_args.kwargs["caption"])
 
     async def test_telegram_media_only_has_newline_attribution_caption(self):
         image = Attachment("a", "pic.jpg", 3, "url", "image")
@@ -101,7 +101,7 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
         self.bot.send_animation.side_effect = BadRequest("wrong animation file")
         await self.tt.send(self.pair, "", attachment=gif, data=b"GIF89a")
         self.bot.send_document.assert_awaited_once()
-        self.assertIn("без предпросмотра", self.bot.send_document.call_args.kwargs["caption"])
+        self.assertIn("without a preview", self.bot.send_document.call_args.kwargs["caption"])
 
     async def test_video_is_sent_as_video_and_falls_back_to_document(self):
         video = Attachment("video", "clip.mp4", 3, "url", "video")
@@ -113,7 +113,7 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
         self.bot.send_video.side_effect = BadRequest("unsupported video codec")
         await self.tt.send(self.pair, "", attachment=video, data=b"mp4")
         self.bot.send_document.assert_awaited_once()
-        self.assertIn("без предпросмотра", self.bot.send_document.call_args.kwargs["caption"])
+        self.assertIn("without a preview", self.bot.send_document.call_args.kwargs["caption"])
 
     async def test_telegram_rate_limit_safe_retry_and_ambiguous_network_hold(self):
         self.bot.send_message.side_effect = RetryAfter(7)

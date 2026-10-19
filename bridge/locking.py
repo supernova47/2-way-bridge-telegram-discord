@@ -29,7 +29,7 @@ class InstanceLock:
                 fcntl.flock(self.file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError:
             self.file.close()
-            raise ConfigError("Мост уже запущен с этой базой; сначала остановите его.") from None
+            raise ConfigError("The bridge is already running with this database; stop it first.") from None
         return self
 
     def __exit__(self, *args):

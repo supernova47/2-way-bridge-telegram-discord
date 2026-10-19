@@ -129,7 +129,7 @@ class EngineTests(unittest.IsolatedAsyncioTestCase):
     async def test_unknown_reply_contains_quote(self):
         self.accept(self.message(reply_id=99, quote="original text"))
         await self.process()
-        self.assertIn("↪ Ответ: original text", self.telegram.sent[0]["content"])
+        self.assertIn("↪ Reply: original text", self.telegram.sent[0]["content"])
 
     async def test_webhook_reply_uses_quote_even_when_mapping_known(self):
         self.pair = replace(self.pair, discord_webhook_env="HOOK")
@@ -138,7 +138,7 @@ class EngineTests(unittest.IsolatedAsyncioTestCase):
         await self.process("telegram")
         self.accept(self.message("telegram", message_id=11, reply_id=10, quote="quoted"))
         await self.process("telegram")
-        self.assertIn("↪ Ответ: quoted", self.discord.sent[1]["content"])
+        self.assertIn("↪ Reply: quoted", self.discord.sent[1]["content"])
         self.assertNotIn("\\[Telegram\\]", self.discord.sent[1]["content"])
 
     async def test_edits_are_idempotent_and_do_not_resend_text(self):
@@ -190,7 +190,7 @@ class EngineTests(unittest.IsolatedAsyncioTestCase):
         await self.process()
         self.assertEqual(self.store.status(), {"done": 1})
         self.assertIn("hello", self.telegram.sent[0]["content"])
-        self.assertIn("не передан", self.telegram.sent[1]["content"])
+        self.assertIn("was not sent", self.telegram.sent[1]["content"])
 
     async def test_media_only_message_has_no_attachment_placeholder(self):
         message = self.message(attachments=[Attachment("a", "photo.jpg", 3, "cdn", "image")])
@@ -227,8 +227,8 @@ class EngineTests(unittest.IsolatedAsyncioTestCase):
         self.accept(self.message(attachments=[Attachment("a", "clip.mp4", 23_000_000, "cdn", "video")]))
         await self.process()
         notice = self.telegram.sent[1]["content"]
-        self.assertIn("23,0 МБ", notice)
-        self.assertIn("20,0 МБ", notice)
+        self.assertIn("23.0 MB", notice)
+        self.assertIn("20.0 MB", notice)
         self.assertIn("max_file_mb", notice)
 
     async def test_retry_resumes_after_sent_text_without_duplication(self):
@@ -362,7 +362,7 @@ class FormattingTests(unittest.TestCase):
         self.assertEqual("".join(parts), "😀\\*\\_\\\\" * 3000)
 
     def test_empty_and_control_only_text_is_not_silently_lost(self):
-        self.assertEqual(chunks("\x00", 2000), ["(пустое сообщение)"])
+        self.assertEqual(chunks("\x00", 2000), ["(empty message)"])
 
     def test_media_only_message_does_not_render_an_attachment_placeholder(self):
         msg = Message("discord", 1, 2, "Автор", "chat", attachments=[Attachment("a", "pic.png", 1, "url")])

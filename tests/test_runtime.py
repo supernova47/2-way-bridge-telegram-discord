@@ -102,7 +102,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         bot.get_chat.return_value.permissions.can_send_videos = False
         with self.assertRaises(ConfigError) as caught:
             await validate_remote(self.config, client, bot, None)
-        self.assertIn("видео", str(caught.exception))
+        self.assertIn("videos", str(caught.exception))
 
     async def test_remote_validation_rejects_privacy_mode_for_non_admin(self):
         _, client, bot = self.remote()

@@ -61,7 +61,7 @@ class Store:
         }
         if active - {pair.name for pair in pairs}:
             raise ConfigError(
-                "В базе есть незавершённые задания удалённой пары; восстановите её конфигурацию."
+                "The database has unfinished jobs for a removed pair; restore its configuration first."
             )
         with self.db:
             for pair in pairs:
@@ -76,7 +76,7 @@ class Store:
                 )
                 old = self.db.execute("SELECT value FROM metadata WHERE key=?", (key,)).fetchone()
                 if old and old[0] != signature:
-                    raise ConfigError("Конечные точки существующей пары изменены; используйте новую базу.")
+                    raise ConfigError("An existing pair's endpoints changed; use a new database.")
                 self.db.execute("INSERT OR IGNORE INTO metadata(key,value) VALUES(?,?)", (key, signature))
 
     def recover(self):
@@ -261,10 +261,10 @@ class Store:
     def retry(self, job_id: int, *, allow_uncertain: bool = False):
         row = self.db.execute("SELECT state FROM jobs WHERE id=?", (job_id,)).fetchone()
         if not row or row[0] not in {"failed", "uncertain"}:
-            raise ConfigError("Задание не найдено или не требует повторной отправки.")
+            raise ConfigError("Job not found or does not need a retry.")
         if row[0] == "uncertain" and not allow_uncertain:
             raise ConfigError(
-                "Спорная отправка: сначала проверьте целевой чат; нужен --allow-duplicate-risk."
+                "Uncertain delivery: check the destination chat first; use --allow-duplicate-risk to retry."
             )
         with self.db:
             self.db.execute("UPDATE operations SET state='retry' WHERE job_id=? AND state!='done'", (job_id,))
@@ -278,7 +278,7 @@ class Store:
             "SELECT * FROM operations WHERE job_id=? AND kind='send' AND state='inflight'", (job_id,)
         ).fetchone()
         if not job or not op or delivered_id <= 0:
-            raise ConfigError("Нет спорной отправки или неверный ID доставленного сообщения.")
+            raise ConfigError("No uncertain delivery found, or the delivered message ID is invalid.")
         target = "telegram" if job["platform"] == "discord" else "discord"
         self.finish_operation(
             job, op["tag"], "send", op["slot"], target, pair.chat(target), delivered_id, op["content"]

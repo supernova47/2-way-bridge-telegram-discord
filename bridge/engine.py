@@ -121,7 +121,7 @@ class Engine:
             except AttachmentUnavailable as exc:
                 text = self.attachment_notice(attachment, message.platform, target, pair, exc)
                 if message.platform == "discord" and target == "telegram" and not texts:
-                    author = visible(message.author, single_line=True)[:100] or "Без имени"
+                    author = visible(message.author, single_line=True)[:100] or "Unknown user"
                     text = f"[Discord] {author}:\n{text}"
                 text = chunks(text, 1000, discord=target == "discord")[0]
                 await self.operation(
@@ -138,9 +138,9 @@ class Engine:
                 await self.operation(job, pair, target, "delete", slot, message_id=int(copy["message_id"]))
 
     def attachment_notice(self, attachment, source, target, pair, error):
-        name = visible(attachment.name, single_line=True)[:180] or "файл"
+        name = visible(attachment.name, single_line=True)[:180] or "file"
         size = attachment.size
-        size_text = f" ({self.format_mb(size)} МБ)" if size is not None else ""
+        size_text = f" ({self.format_mb(size)} MB)" if size is not None else ""
         code = getattr(error, "code", "attachment_unavailable")
         if code in {"file_too_large", "file_too_large_or_missing"}:
             limit = min(
@@ -151,34 +151,34 @@ class Engine:
             if size is not None and size > limit:
                 limit_mb = self.format_mb(limit)
                 if source == "telegram" and limit == 20 * MB:
-                    reason = f"Bot API Telegram позволяет скачать файл размером до {limit_mb} МБ"
+                    reason = f"Telegram Bot API allows downloads up to {limit_mb} MB"
                 elif target == "discord" and self.transports[target].file_limit(pair) == limit:
-                    reason = f"лимит загрузки Discord-канала — {limit_mb} МБ"
+                    reason = f"the Discord channel upload limit is {limit_mb} MB"
                 elif limit == self.config.max_file_mb * MB:
-                    reason = f"max_file_mb в конфигурации равен {limit_mb} МБ"
+                    reason = f"max_file_mb is set to {limit_mb} MB"
                 else:
-                    reason = f"лимит передачи — {limit_mb} МБ"
-                return f"[Файл «{name}»{size_text} не передан: {reason}.]"
+                    reason = f"the transfer limit is {limit_mb} MB"
+                return f'[File "{name}"{size_text} was not sent: {reason}.]'
             if code == "file_too_large_or_missing":
                 return (
-                    f"[Файл «{name}»{size_text} не передан: Telegram не вернул "
-                    "доступную ссылку для скачивания.]"
+                    f'[File "{name}"{size_text} was not sent: Telegram did not provide '
+                    "a downloadable file link.]"
                 )
             if source == "telegram" and limit == 20 * MB:
                 return (
-                    f"[Файл «{name}»{size_text} не передан: Telegram Bot API "
-                    "не скачивает файлы больше 20 МБ.]"
+                    f'[File "{name}"{size_text} was not sent: Telegram Bot API '
+                    "cannot download files larger than 20 MB.]"
                 )
-            return f"[Файл «{name}»{size_text} не передан: превышен лимит размера.]"
+            return f'[File "{name}"{size_text} was not sent: file size limit exceeded.]'
         if code in {"telegram_file_rejected", "discord_file_rejected"}:
-            return f"[Файл «{name}»{size_text} не принят целевой платформой; сохраните его в исходном чате.]"
+            return f'[File "{name}"{size_text} was rejected by the destination; keep it in the source chat.]'
         if code in {"telegram_file_unavailable", "download_unavailable", "unsafe_download_url"}:
-            return f"[Файл «{name}»{size_text} не удалось скачать из исходного чата.]"
-        return f"[Файл «{name}»{size_text} не передан: источник или целевая платформа отклонили файл.]"
+            return f'[File "{name}"{size_text} could not be downloaded from the source chat.]'
+        return f'[File "{name}"{size_text} was not sent: the source or destination rejected it.]'
 
     @staticmethod
     def format_mb(size):
-        return f"{size / MB:.1f}".replace(".", ",")
+        return f"{size / MB:.1f}"
 
     async def process_one(self, pair: Pair, source: str) -> bool:
         job = self.store.next_job(pair.name, source)

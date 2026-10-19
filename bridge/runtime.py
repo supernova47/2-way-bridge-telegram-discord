@@ -55,13 +55,15 @@ class BridgeClient(discord.Client):
 
 async def validate_remote(config: Config, client: BridgeClient, bot: Bot, session):
     if (await bot.get_webhook_info()).url:
-        raise ConfigError("Telegram: уже настроен webhook; удалите его перед запуском polling-моста.")
+        raise ConfigError(
+            "Telegram already has a webhook configured; remove it before starting the polling bridge."
+        )
     me = await bot.get_me()
     for index, pair in enumerate(config.pairs, 1):
         channel = client.get_channel(pair.discord_channel_id)
         if not isinstance(channel, (discord.TextChannel, discord.Thread)):
             raise ConfigError(
-                f"Пара {index}: Discord-канал не найден или не является текстовым каналом/веткой."
+                f"Pair {index}: the Discord channel was not found or is not a text channel or thread."
             )
         permissions = channel.permissions_for(channel.guild.me)
         required = [permissions.view_channel, permissions.read_message_history, permissions.attach_files]
@@ -71,22 +73,25 @@ async def validate_remote(config: Config, client: BridgeClient, bot: Bot, sessio
             else permissions.send_messages
         )
         if not all(required):
-            raise ConfigError(f"Пара {index}: не хватает прав Discord View/Read History/Send/Attach Files.")
+            raise ConfigError(
+                f"Pair {index}: missing Discord View Channel, Read Message History, "
+                "Send Messages, or Attach Files permission."
+            )
         if pair.discord_webhook_env:
             webhook = await discord.Webhook.from_url(config.webhooks[pair.name], session=session).fetch()
             expected_channel = channel.parent_id if isinstance(channel, discord.Thread) else channel.id
             if webhook.channel_id != expected_channel:
-                raise ConfigError(f"Пара {index}: webhook принадлежит другому Discord-каналу.")
+                raise ConfigError(f"Pair {index}: the webhook belongs to a different Discord channel.")
         chat = await bot.get_chat(pair.telegram_chat_id)
         if chat.type not in {"group", "supergroup"}:
-            raise ConfigError(f"Пара {index}: Telegram ID должен принадлежать группе или супергруппе.")
+            raise ConfigError(f"Pair {index}: telegram_chat_id must belong to a group or supergroup.")
         member = await bot.get_chat_member(pair.telegram_chat_id, me.id)
         if member.status in {"left", "kicked"}:
-            raise ConfigError(f"Пара {index}: Telegram-бот отсутствует в группе.")
+            raise ConfigError(f"Pair {index}: the Telegram bot is not a member of the group.")
         admin = member.status in {"administrator", "creator"}
         if not admin and not me.can_read_all_group_messages:
             raise ConfigError(
-                "Telegram: отключите Group Privacy у BotFather и заново добавьте бота в группу."
+                "Telegram: disable Group Privacy in BotFather, then remove and re-add the bot to the group."
             )
         if not admin:
             rights = member if member.status == "restricted" else chat.permissions
@@ -100,10 +105,13 @@ async def validate_remote(config: Config, client: BridgeClient, bot: Bot, sessio
                 )
             ):
                 raise ConfigError(
-                    f"Пара {index}: Telegram-боту нужны права отправки текста, фото, видео и документов."
+                    f"Pair {index}: the Telegram bot needs permission to send messages, photos, "
+                    "videos, and documents."
                 )
         if pair.telegram_thread_id is not None and not chat.is_forum:
-            raise ConfigError(f"Пара {index}: тема задана для Telegram-группы без режима форума.")
+            raise ConfigError(
+                f"Pair {index}: a Telegram topic was configured for a group without forum topics enabled."
+            )
         # No IDs, names of people/chats, URLs or tokens in logs.
         log.info(
             "pair=%s Discord=text Telegram=group webhook=%s topic=%s configured",
@@ -131,13 +139,14 @@ async def telegram_poll(bot: Bot, ingestor: Ingestor, store: Store):
             await asyncio.sleep(delay.total_seconds() if hasattr(delay, "total_seconds") else float(delay))
         except (Conflict, Forbidden, InvalidToken):
             raise ConfigError(
-                "Telegram polling: конфликт другого процесса, токен или доступ к группе."
+                "Telegram polling conflict: another process may be running, or the token or "
+                "group access is invalid."
             ) from None
         except NetworkError:
             failures += 1
             if failures >= 10:
                 raise ConfigError(
-                    "Telegram недоступен после 10 попыток; нужен перезапуск процесса."
+                    "Telegram remained unavailable after 10 attempts; restart the process."
                 ) from None
             log.warning("Telegram polling temporarily unavailable; attempt=%s", failures)
             await asyncio.sleep(min(60, 2**failures))
@@ -178,9 +187,9 @@ async def run(config: Config, store: Store):
                 )
                 if gateway in done:
                     await gateway
-                    raise ConfigError("Discord отключился при запуске.")
+                    raise ConfigError("Discord disconnected during startup.")
                 if ready not in done:
-                    raise ConfigError("Discord: время ожидания подключения истекло.")
+                    raise ConfigError("Timed out while connecting to Discord.")
                 await validate_remote(config, client, bot, session)
                 engine = Engine(
                     config,
@@ -204,7 +213,7 @@ async def run(config: Config, store: Store):
                 )
                 for task in done:
                     await task
-                raise ConfigError("Задача моста остановилась; нужен перезапуск процесса.")
+                raise ConfigError("A bridge task stopped; restart the process.")
         finally:
             for task in tasks:
                 task.cancel()

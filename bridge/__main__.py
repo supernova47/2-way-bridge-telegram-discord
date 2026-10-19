@@ -51,7 +51,7 @@ def main() -> int:
         if args.command == "telegram-chats":
             token = os.environ.get("TELEGRAM_TOKEN", "").strip()
             if not token:
-                raise ConfigError("Не задана переменная окружения TELEGRAM_TOKEN.")
+                raise ConfigError("Missing environment variable: TELEGRAM_TOKEN.")
             from .discovery import telegram_chats
 
             asyncio.run(telegram_chats(token))
@@ -84,7 +84,7 @@ def main() -> int:
                     row = store.db.execute("SELECT pair FROM jobs WHERE id=?", (args.job_id,)).fetchone()
                     pair = next((p for p in config.pairs if row and p.name == row[0]), None)
                     if pair is None:
-                        raise ConfigError("Пара задания отсутствует в конфигурации.")
+                        raise ConfigError("The job's pair is missing from the configuration.")
                     store.resolve(args.job_id, args.delivered_id, pair)
                     print("Delivery recorded. Restart the bridge to finish remaining parts.")
                 else:
